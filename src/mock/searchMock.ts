@@ -1,4 +1,4 @@
-import type { CriteriaRequest, SearchResponse, PageResult, SearchSummaryItem, ArticleSummaryItem, PatentSummaryItem, AwardSummaryItem } from '@/types/search';
+import type { CriteriaRequest, SearchResponse, PageResult, SearchSummaryItem, ArticleSummaryItem, PatentSummaryItem, AwardSummaryItem, SearchRecordPageResult, SearchRecord } from '@/types/search';
 
 // 生成mock数据
 const generateMockArticles = (count: number): ArticleSummaryItem[] => {
@@ -205,4 +205,98 @@ export const mockGetCitationText = async (outputUuid: string): Promise<string> =
   const format = citationFormats[hash % citationFormats.length]!;
 
   return format;
+};
+
+// 生成模拟的检索条件数据
+export const mockGetCriteriaData = async (): Promise<import('@/types/search').CriteriaData> => {
+  // 模拟网络延迟
+  await new Promise((resolve) => setTimeout(resolve, 300));
+
+  return {
+    outputTypeInfo: {
+      '论文': 12450,
+      '专利': 8320,
+      '奖项': 156,
+    },
+    subjectInfo: {
+      '计算机科学与技术': {
+        '计算机系统结构': 2345,
+        '计算机软件与理论': 3456,
+        '计算机应用技术': 4567,
+      },
+      '软件工程': {
+        '软件工程理论与方法': 1234,
+        '软件工程技术': 2345,
+        '软件服务工程': 1123,
+      },
+      '网络空间安全': {
+        '密码学': 890,
+        '系统安全': 1234,
+        '网络安全': 1456,
+      },
+    },
+    institutionInfo: {
+      '北京航空航天大学': 3456,
+      '清华大学': 4567,
+      '中国科学院': 5678,
+      '华为技术有限公司': 2345,
+    },
+  };
+};
+
+// 生成模拟的检索历史数据
+export const mockGetSearchHistory = async (page: number = 0, size: number = 10): Promise<SearchRecordPageResult> => {
+  // 模拟网络延迟
+  await new Promise((resolve) => setTimeout(resolve, 500));
+
+  // 生成模拟的历史记录
+  const allRecords: SearchRecord[] = [];
+  const keywords = ['深度学习', '机器学习', '人工智能', '数据挖掘', '计算机视觉', '自然语言处理', '软件分析', '云计算', '区块链', '物联网'];
+  const institutions = ['北京航空航天大学', '清华大学', '中国科学院', '华为技术有限公司'];
+  
+  // 生成15条历史记录
+  for (let i = 0; i < 15; i++) {
+    const hasRawQuery = i % 3 === 0; // 每3条记录有一条是使用LLM智能检索的
+    const outputTypes = i % 2 === 0 ? ['论文'] : i % 3 === 0 ? ['论文', '专利'] : ['专利'];
+    const selectedInstitutions = i % 4 === 0 ? [institutions[i % institutions.length]!] : [];
+    
+    const record: SearchRecord = {
+      uuid: `history-uuid-${i}`,
+      rawQuery: hasRawQuery ? `请帮我找一些关于${keywords[i % keywords.length]}的最新研究成果` : undefined,
+      searchCriteria: {
+        content: keywords[i % keywords.length],
+        outputTypeList: outputTypes,
+        subjectList: {},
+        institutionList: selectedInstitutions,
+        publishYearRange: i % 5 === 0 ? { begin: 2020, end: 2023 } : undefined,
+        pagination: {
+          page: 0,
+          size: 10,
+        },
+        sortBy: {
+          field: i % 3 === 0 ? 'citation' : i % 3 === 1 ? 'publishDate' : 'relevance',
+          order: 'desc',
+        },
+      },
+      searchTime: new Date(Date.now() - i * 86400000).toISOString(), // 每条记录间隔1天
+    };
+    
+    allRecords.push(record);
+  }
+
+  // 分页处理
+  const startIndex = page * size;
+  const endIndex = Math.min(startIndex + size, allRecords.length);
+  const pageContent = allRecords.slice(startIndex, endIndex);
+  const totalPages = Math.ceil(allRecords.length / size);
+
+  return {
+    content: pageContent,
+    size: pageContent.length,
+    totalElements: allRecords.length,
+    totalPages,
+    number: page,
+    first: page === 0,
+    last: page >= totalPages - 1,
+  };
 };

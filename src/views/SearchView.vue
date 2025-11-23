@@ -20,6 +20,16 @@
             <n-button type="primary" size="large" @click="handleSearch" :loading="loading">
               搜索
             </n-button>
+            <n-button size="large" @click="handleOpenHistory">
+              <template #icon>
+                <n-icon>
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                    <path fill="currentColor" d="M13.5,8H12V13L16.28,15.54L17,14.33L13.5,12.25V8M13,3A9,9 0 0,0 4,12H1L4.96,16.03L9,12H6A7,7 0 0,1 13,5A7,7 0 0,1 20,12A7,7 0 0,1 13,19C11.07,19 9.32,18.21 8.06,16.94L6.64,18.36C8.27,20 10.5,21 13,21A9,9 0 0,0 22,12A9,9 0 0,0 13,3Z" />
+                  </svg>
+                </n-icon>
+              </template>
+              检索历史
+            </n-button>
           </n-input-group>
 
           <!-- 高级筛选 -->
@@ -306,15 +316,141 @@
         </n-space>
       </n-spin>
     </n-modal>
+
+    <!-- 检索历史弹窗 -->
+    <n-modal
+      v-model:show="showHistoryModal"
+      preset="card"
+      title="检索历史"
+      style="width: 900px"
+      :bordered="false"
+      size="huge"
+    >
+      <n-spin :show="historyLoading">
+        <n-space vertical :size="16">
+          <!-- Mock 数据提示 -->
+          <n-alert
+            v-if="isUsingHistoryMockData && !historyLoading"
+            type="warning"
+            title="演示数据"
+            closable
+          >
+            当前显示的是模拟检索历史，等待后端服务接入后将显示真实数据
+          </n-alert>
+
+          <!-- 历史记录列表 -->
+          <n-empty
+            v-if="searchHistory.length === 0 && !historyLoading"
+            description="暂无检索历史"
+          />
+
+          <n-list v-else hoverable>
+            <n-list-item v-for="record in searchHistory" :key="record.uuid">
+              <n-space vertical :size="8">
+                <!-- 如果有LLM原始提示词，显示它 -->
+                <n-tag v-if="record.rawQuery" type="info" size="small">
+                  <template #icon>
+                    <n-icon>
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                        <path fill="currentColor" d="M20,2H4A2,2 0 0,0 2,4V22L6,18H20A2,2 0 0,0 22,16V4A2,2 0 0,0 20,2M6,9H18V11H6M14,14H6V12H14M18,8H6V6H18" />
+                      </svg>
+                    </n-icon>
+                  </template>
+                  智能检索
+                </n-tag>
+
+                <!-- 显示搜索时间 -->
+                <n-text depth="3" style="font-size: 12px">
+                  检索时间: {{ formatSearchTime(record.searchTime) }}
+                </n-text>
+
+                <!-- 显示原始提示词 -->
+                <n-text v-if="record.rawQuery" strong style="font-size: 14px">
+                  "{{ record.rawQuery }}"
+                </n-text>
+
+                <!-- 显示搜索条件 -->
+                <n-space :size="8">
+                  <n-text depth="3">搜索条件:</n-text>
+                  
+                  <n-tag v-if="record.searchCriteria.content" size="small" type="default">
+                    关键词: {{ record.searchCriteria.content }}
+                  </n-tag>
+
+                  <n-tag
+                    v-if="record.searchCriteria.outputTypeList.length > 0"
+                    size="small"
+                    type="info"
+                  >
+                    类型: {{ record.searchCriteria.outputTypeList.join(', ') }}
+                  </n-tag>
+
+                  <n-tag
+                    v-if="record.searchCriteria.institutionList.length > 0"
+                    size="small"
+                    type="success"
+                  >
+                    机构: {{ record.searchCriteria.institutionList.join(', ') }}
+                  </n-tag>
+
+                  <n-tag
+                    v-if="record.searchCriteria.publishYearRange"
+                    size="small"
+                    type="warning"
+                  >
+                    年份: {{ record.searchCriteria.publishYearRange.begin }} - {{ record.searchCriteria.publishYearRange.end }}
+                  </n-tag>
+
+                  <n-tag size="small">
+                    排序: {{ 
+                      record.searchCriteria.sortBy.field === 'citation' ? '被引次数' :
+                      record.searchCriteria.sortBy.field === 'publishDate' ? '发表时间' : '相关度'
+                    }} ({{ record.searchCriteria.sortBy.order === 'asc' ? '升序' : '降序' }})
+                  </n-tag>
+                </n-space>
+
+                <!-- 操作按钮 -->
+                <n-space>
+                  <n-button
+                    size="small"
+                    type="primary"
+                    @click="handleRestoreSearch(record)"
+                  >
+                    <template #icon>
+                      <n-icon>
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                          <path fill="currentColor" d="M13,3A9,9 0 0,0 4,12H1L4.89,15.89L4.96,16.03L9,12H6A7,7 0 0,1 13,5A7,7 0 0,1 20,12A7,7 0 0,1 13,19C11.07,19 9.32,18.21 8.06,16.94L6.64,18.36C8.27,20 10.5,21 13,21A9,9 0 0,0 22,12A9,9 0 0,0 13,3Z" />
+                        </svg>
+                      </n-icon>
+                    </template>
+                    恢复此搜索
+                  </n-button>
+                </n-space>
+              </n-space>
+            </n-list-item>
+          </n-list>
+
+          <!-- 分页 -->
+          <n-pagination
+            v-if="historyTotalPages > 1"
+            v-model:page="historyPage"
+            :page-count="historyTotalPages"
+            :page-size="historyPageSize"
+            @update:page="handleHistoryPageChange"
+            style="display: flex; justify-content: center"
+          />
+        </n-space>
+      </n-spin>
+    </n-modal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch } from 'vue';
+import { ref, reactive, computed, watch, onMounted } from 'vue';
 import { SearchOutline } from '@vicons/ionicons5';
 import { useMessage } from 'naive-ui';
-import type { ArticleSummaryItem, PatentSummaryItem, SearchResponse, CriteriaRequest } from '@/types/search';
-import { searchByCriteria, getCitationText, type ApiResponse } from '@/api/search';
+import type { ArticleSummaryItem, PatentSummaryItem, SearchResponse, CriteriaRequest, SearchRecord } from '@/types/search';
+import { searchByCriteria, getCitationText, getSearchHistory, type ApiResponse } from '@/api/search';
 import { use } from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
 import { PieChart, BarChart } from 'echarts/charts';
@@ -357,6 +493,16 @@ const currentCitation = ref({
   text: '',
   isMockData: false,
 });
+
+// 检索历史相关
+const showHistoryModal = ref(false);
+const historyLoading = ref(false);
+const searchHistory = ref<SearchRecord[]>([]);
+const historyPage = ref(0);
+const historyPageSize = ref(10);
+const historyTotalElements = ref(0);
+const historyTotalPages = ref(0);
+const isUsingHistoryMockData = ref(false);
 
 // 机构选项
 const institutionOptions = [
@@ -491,6 +637,81 @@ const handleCopyCitation = async () => {
     message.error('复制失败，请手动复制');
   }
 };
+
+// 加载检索历史
+const loadSearchHistory = async () => {
+  historyLoading.value = true;
+  try {
+    const response = await getSearchHistory(historyPage.value, historyPageSize.value);
+    searchHistory.value = response.data.content;
+    historyTotalElements.value = response.data.totalElements;
+    historyTotalPages.value = response.data.totalPages;
+    isUsingHistoryMockData.value = response.isMockData;
+
+    if (response.isMockData) {
+      message.info('当前显示的是演示历史数据', { duration: 2000 });
+    }
+  } catch (error) {
+    message.error('加载检索历史失败');
+    console.error('加载检索历史失败:', error);
+  } finally {
+    historyLoading.value = false;
+  }
+};
+
+// 打开检索历史弹窗
+const handleOpenHistory = () => {
+  showHistoryModal.value = true;
+  loadSearchHistory();
+};
+
+// 历史记录分页变化
+const handleHistoryPageChange = (page: number) => {
+  historyPage.value = page - 1; // 转换为0下标
+  loadSearchHistory();
+};
+
+// 从历史记录恢复搜索
+const handleRestoreSearch = (record: SearchRecord) => {
+  // 恢复搜索条件
+  searchForm.content = record.searchCriteria.content || '';
+  searchForm.outputTypeList = record.searchCriteria.outputTypeList;
+  searchForm.institutionList = record.searchCriteria.institutionList;
+  searchForm.sortBy = record.searchCriteria.sortBy;
+  
+  if (record.searchCriteria.publishYearRange) {
+    yearBegin.value = record.searchCriteria.publishYearRange.begin;
+    yearEnd.value = record.searchCriteria.publishYearRange.end;
+  } else {
+    yearBegin.value = null;
+    yearEnd.value = null;
+  }
+
+  // 关闭弹窗
+  showHistoryModal.value = false;
+  
+  // 执行搜索
+  message.info('已恢复历史搜索条件');
+  handleSearch();
+};
+
+// 格式化时间
+const formatSearchTime = (timeString?: string) => {
+  if (!timeString) return '未知时间';
+  const date = new Date(timeString);
+  return date.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
+// 组件挂载时可以预加载历史数据（可选）
+// onMounted(() => {
+//   loadSearchHistory();
+// });
 
 // 成果类型统计图表
 const typeChartOption = computed(() => {

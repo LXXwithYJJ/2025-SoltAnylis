@@ -148,3 +148,45 @@ export interface CitationTextURLParams {
   // 成果的UUID，该UUID用于在本系统内唯一标识成果，例如"98641be2-73ca-4a11-ae17-7119198b3e07"
   outputUuid: string;
 }
+
+// 二级学科信息：二级学科名称 -> 该二级学科成果数量
+export type SecondarySubjectInfoMap = Record<string, number>;
+
+// 检索条件数据
+export interface CriteriaData {
+  // 成果类型（例如，"论文"） -> 成果数量（例如，12450）
+  outputTypeInfo: Record<string, number>;
+
+  // 学科信息，一级学科名称（例如，"计算机科学与技术"）-> 该一级学科下的二级学科信息
+  subjectInfo: Record<string, SecondarySubjectInfoMap>;
+
+  // 机构名称（例如，"武汉大学"）-> 成果数量（例如，1234）
+  institutionInfo: Record<string, number>;
+}
+
+// 检索历史记录
+export interface SearchRecord {
+  uuid: string;
+  // 使用LLM智能检索时，用户输入的原始提示词；若未使用智能检索，则不存在
+  rawQuery?: string;
+  searchCriteria: CriteriaRequest;
+  // 检索时间
+  searchTime?: string;
+}
+
+// 分页的检索历史结果
+export interface SearchRecordPageResult {
+  content: SearchRecord[];
+  // 本页数据数量
+  size: number;
+  // 总计元素个数
+  totalElements: number;
+  // 总计页数
+  totalPages: number;
+  // 这些数据是第几页的数据，0下标
+  number: number;
+  // 是否是第一页
+  first: boolean;
+  // 是否是最后一页
+  last: boolean;
+}

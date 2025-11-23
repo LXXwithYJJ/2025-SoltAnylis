@@ -1,6 +1,6 @@
 import axios from 'axios';
-import type { CriteriaRequest, SearchResponse, CitationTextURLParams } from '@/types/search';
-import { mockSearchByCriteria, mockGetCitationText } from '@/mock/searchMock';
+import type { CriteriaRequest, SearchResponse, CitationTextURLParams, CriteriaData, SearchRecordPageResult } from '@/types/search';
+import { mockSearchByCriteria, mockGetCitationText, mockGetCriteriaData, mockGetSearchHistory } from '@/mock/searchMock';
 
 // 后端统一响应格式
 export interface APIResponse<T> {
@@ -165,6 +165,107 @@ export const getCitationText = async (outputUuid: string): Promise<ApiResponse<s
     } else {
       // 未启用Mock降级，直接抛出错误
       console.error('❌ 获取引用文本 API 调用失败:', error);
+      throw error;
+    }
+  }
+};
+
+// 获取检索条件数据
+// 优先调用真实API,如果失败且启用了Mock降级,则使用mock数据作为兜底
+export const getCriteriaData = async (): Promise<ApiResponse<CriteriaData>> => {
+  try {
+    console.log('🔍 尝试调用真实 API 获取检索条件数据...', { 
+      url: `${API_BASE_URL}/search/criteria_data`
+    });
+
+    // 调用后端接口,返回格式: { code, message, data }
+    const response = await apiClient.get<APIResponse<CriteriaData>>('/search/criteria_data');
+
+    // 解包后端统一响应格式,取出实际数据
+    const apiResponse = response.data;
+
+    console.log('✅ API 调用成功', {
+      code: apiResponse.code,
+      message: apiResponse.message,
+      outputTypeCount: Object.keys(apiResponse.data.outputTypeInfo).length,
+      subjectCount: Object.keys(apiResponse.data.subjectInfo).length,
+      institutionCount: Object.keys(apiResponse.data.institutionInfo).length
+    });
+
+    return {
+      data: apiResponse.data, // 取出 data 字段中的实际数据
+      isMockData: false,
+    };
+  } catch (error) {
+    // API调用失败
+    if (ENABLE_MOCK_FALLBACK) {
+      // 启用了Mock降级,使用mock数据
+      if (axios.isAxiosError(error)) {
+        console.warn('⚠️ 获取检索条件数据 API 调用失败,使用 Mock 数据兜底:', error.message);
+      } else {
+        const errMsg = error instanceof Error ? error.message : String(error);
+        console.warn('⚠️ 获取检索条件数据 API 调用出错,使用 Mock 数据兜底:', errMsg);
+      }
+      const mockData = await mockGetCriteriaData();
+      return {
+        data: mockData,
+        isMockData: true,
+      };
+    } else {
+      // 未启用Mock降级,直接抛出错误
+      console.error('❌ 获取检索条件数据 API 调用失败:', error);
+      throw error;
+    }
+  }
+};
+
+// 获取检索历史
+// 优先调用真实API，如果失败且启用了Mock降级，则使用mock数据作为兜底
+export const getSearchHistory = async (page: number = 0, size: number = 10): Promise<ApiResponse<SearchRecordPageResult>> => {
+  try {
+    console.log('🔍 尝试调用真实 API 获取检索历史...', { 
+      url: `${API_BASE_URL}/search/history`,
+      page,
+      size
+    });
+
+    // 调用后端接口，返回格式: { code, message, data }
+    const response = await apiClient.get<APIResponse<SearchRecordPageResult>>('/search/history', {
+      params: { page, size }
+    });
+
+    // 解包后端统一响应格式，取出实际数据
+    const apiResponse = response.data;
+
+    console.log('✅ API 调用成功', {
+      code: apiResponse.code,
+      message: apiResponse.message,
+      totalElements: apiResponse.data.totalElements,
+      currentPage: apiResponse.data.number
+    });
+
+    return {
+      data: apiResponse.data, // 取出 data 字段中的实际数据
+      isMockData: false,
+    };
+  } catch (error) {
+    // API调用失败
+    if (ENABLE_MOCK_FALLBACK) {
+      // 启用了Mock降级，使用mock数据
+      if (axios.isAxiosError(error)) {
+        console.warn('⚠️ 获取检索历史 API 调用失败，使用 Mock 数据兜底:', error.message);
+      } else {
+        const errMsg = error instanceof Error ? error.message : String(error);
+        console.warn('⚠️ 获取检索历史 API 调用出错，使用 Mock 数据兜底:', errMsg);
+      }
+      const mockData = await mockGetSearchHistory(page, size);
+      return {
+        data: mockData,
+        isMockData: true,
+      };
+    } else {
+      // 未启用Mock降级，直接抛出错误
+      console.error('❌ 获取检索历史 API 调用失败:', error);
       throw error;
     }
   }
