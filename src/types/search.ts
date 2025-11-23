@@ -139,6 +139,12 @@ export interface SearchResponse {
   // 检索结果
   pageResult: PageResult;
 
-  // 相关推荐：聚类、向量查询推荐相关文章
+  // 相关推荐:聚类、向量查询推荐相关文章
   recommendationList: SearchSummaryItem[];
+}
+
+// 获取引用格式文本的URL参数
+export interface CitationTextURLParams {
+  // 成果的UUID，该UUID用于在本系统内唯一标识成果，例如"98641be2-73ca-4a11-ae17-7119198b3e07"
+  outputUuid: string;
 }

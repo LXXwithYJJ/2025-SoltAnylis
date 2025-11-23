@@ -185,3 +185,24 @@ export const mockSearchByCriteria = async (request: CriteriaRequest): Promise<Se
     recommendationList,
   };
 };
+
+// 生成模拟的引用格式文本
+export const mockGetCitationText = async (outputUuid: string): Promise<string> => {
+  // 模拟网络延迟
+  await new Promise((resolve) => setTimeout(resolve, 300));
+
+  // 模拟各种不同格式的引用文本
+  const citationFormats = [
+    `张三, 李四, 王五. 基于深度学习的图像识别研究[J]. 计算机学报, 2023, 46(5): 123-135.`,
+    `Smith J, Johnson M, Brown K. Advanced Machine Learning Techniques for Data Analysis[J]. IEEE Transactions on Neural Networks, 2023, 34(2): 456-478. DOI: 10.1109/TNN.2023.123456`,
+    `王明, 刘华. 人工智能在医疗诊断中的应用研究[J]. 软件学报, 2022, 33(8): 2345-2367.`,
+    `Chen L, Zhang Y, Liu X. Deep Learning Based Natural Language Processing: A Survey[C]//Proceedings of the 2023 International Conference on Artificial Intelligence. ACM, 2023: 89-97.`,
+    `赵六, 孙七. 云计算环境下的数据安全保护技术[J]. 通信学报, 2023, 44(3): 78-90. DOI: 10.11959/j.issn.1000-436x.2023056`,
+  ];
+
+  // 根据UUID返回不同的引用文本（模拟不同的成果）
+  const hash = outputUuid.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  const format = citationFormats[hash % citationFormats.length]!;
+
+  return format;
+};

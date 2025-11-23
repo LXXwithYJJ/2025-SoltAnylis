@@ -93,7 +93,19 @@
       <!-- 搜索结果 -->
       <n-card v-if="searchResult" title="搜索结果" :bordered="false">
         <template #header-extra>
-          <n-text depth="3">共找到 {{ searchResult.pageResult.totalElements }} 条结果</n-text>
+          <n-space align="center">
+            <n-tag v-if="isUsingMockData" type="warning" size="small">
+              <template #icon>
+                <n-icon>
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                    <path fill="currentColor" d="M13,9H11V7H13M13,17H11V11H13M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z" />
+                  </svg>
+                </n-icon>
+              </template>
+              演示数据
+            </n-tag>
+            <n-text depth="3">共找到 {{ searchResult.pageResult.totalElements }} 条结果</n-text>
+          </n-space>
         </template>
 
         <n-space vertical :size="16">
@@ -155,9 +167,24 @@
                 </template>
 
                 <template #footer>
-                  <n-space>
+                  <n-space align="center">
                     <n-tag size="small" type="warning">相关度: {{ (item.relevance * 100).toFixed(1) }}%</n-tag>
                     <n-tag v-if="item.citationTextAvailable" size="small" type="success">可引用</n-tag>
+                    <n-button
+                      v-if="item.citationTextAvailable"
+                      size="small"
+                      type="primary"
+                      @click="handleGetCitation(item.outputUuid, item.outputName)"
+                    >
+                      <template #icon>
+                        <n-icon>
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                            <path fill="currentColor" d="M14,17H17L19,13V7H13V13H16M6,17H9L11,13V7H5V13H8L6,17Z" />
+                          </svg>
+                        </n-icon>
+                      </template>
+                      获取引用
+                    </n-button>
                   </n-space>
                 </template>
               </n-thing>
@@ -213,14 +240,81 @@
         </n-grid>
       </n-card>
     </n-space>
+
+    <!-- 引用文本弹窗 -->
+    <n-modal
+      v-model:show="showCitationModal"
+      preset="card"
+      :title="`引用格式 - ${currentCitation.outputName}`"
+      style="width: 700px"
+      :bordered="false"
+      size="huge"
+    >
+      <n-spin :show="citationLoading">
+        <n-space vertical :size="16">
+          <!-- Mock 数据提示 -->
+          <n-alert
+            v-if="currentCitation.isMockData && !citationLoading"
+            type="warning"
+            title="演示数据"
+            closable
+          >
+            当前显示的是模拟引用文本，等待后端服务接入后将显示真实数据
+          </n-alert>
+
+          <!-- 引用文本 -->
+          <n-card
+            v-if="currentCitation.text"
+            size="small"
+            :bordered="true"
+            style="background-color: #f9f9f9"
+          >
+            <n-text
+              style="
+                font-family: 'Times New Roman', '宋体', serif;
+                line-height: 1.8;
+                font-size: 15px;
+                display: block;
+                word-break: break-word;
+              "
+            >
+              {{ currentCitation.text }}
+            </n-text>
+          </n-card>
+
+          <!-- 操作按钮 -->
+          <n-space justify="end">
+            <n-button @click="showCitationModal = false">关闭</n-button>
+            <n-button
+              type="primary"
+              :disabled="!currentCitation.text"
+              @click="handleCopyCitation"
+            >
+              <template #icon>
+                <n-icon>
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                    <path
+                      fill="currentColor"
+                      d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"
+                    />
+                  </svg>
+                </n-icon>
+              </template>
+              复制引用
+            </n-button>
+          </n-space>
+        </n-space>
+      </n-spin>
+    </n-modal>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, computed, watch } from 'vue';
 import { SearchOutline } from '@vicons/ionicons5';
+import { useMessage } from 'naive-ui';
 import type { ArticleSummaryItem, PatentSummaryItem, SearchResponse, CriteriaRequest } from '@/types/search';
-import { mockSearchByCriteria } from '@/mock/searchMock';
+import { searchByCriteria, getCitationText, type ApiResponse } from '@/api/search';
 import { use } from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
 import { PieChart, BarChart } from 'echarts/charts';
@@ -228,6 +322,9 @@ import { TitleComponent, TooltipComponent, LegendComponent, GridComponent } from
 import VChart from 'vue-echarts';
 
 use([CanvasRenderer, PieChart, BarChart, TitleComponent, TooltipComponent, LegendComponent, GridComponent]);
+
+// 消息提示
+const message = useMessage();
 
 // 搜索表单
 const searchForm = reactive({
@@ -250,6 +347,16 @@ const pageSize = ref(10);
 // 搜索结果
 const searchResult = ref<SearchResponse | null>(null);
 const loading = ref(false);
+const isUsingMockData = ref(false); // 标记是否使用了Mock数据
+
+// 引用文本相关
+const showCitationModal = ref(false);
+const citationLoading = ref(false);
+const currentCitation = ref({
+  outputName: '',
+  text: '',
+  isMockData: false,
+});
 
 // 机构选项
 const institutionOptions = [
@@ -275,6 +382,8 @@ const sortOrderOptions = [
 // 执行搜索
 const handleSearch = async () => {
   loading.value = true;
+  isUsingMockData.value = false;
+  
   try {
     const request: CriteriaRequest = {
       content: searchForm.content || undefined,
@@ -292,9 +401,22 @@ const handleSearch = async () => {
       sortBy: searchForm.sortBy,
     };
 
-    searchResult.value = await mockSearchByCriteria(request);
+    // 调用API（内部会自动处理失败并使用mock数据兜底）
+    const response: ApiResponse<SearchResponse> = await searchByCriteria(request);
+    searchResult.value = response.data;
+    isUsingMockData.value = response.isMockData;
+    
+    // 如果使用了Mock数据，提示用户
+    if (response.isMockData) {
+      message.info('当前使用演示数据，等待后端服务接入后将显示真实数据', {
+        duration: 3000,
+      });
+    }
+    
   } catch (error) {
-    console.error('搜索失败:', error);
+    // 这里只处理意外错误（理论上不应该到这里，因为API函数内部已经处理了错误）
+    console.error('搜索出现意外错误:', error);
+    message.error('搜索失败，请稍后重试');
   } finally {
     loading.value = false;
   }
@@ -330,6 +452,44 @@ const getOutputTypeColor = (type: string) => {
     award: 'warning',
   };
   return map[type] || 'default';
+};
+
+// 获取引用文本
+const handleGetCitation = async (outputUuid: string, outputName: string) => {
+  citationLoading.value = true;
+  showCitationModal.value = true;
+  currentCitation.value = {
+    outputName,
+    text: '',
+    isMockData: false,
+  };
+
+  try {
+    const response = await getCitationText(outputUuid);
+    currentCitation.value.text = response.data;
+    currentCitation.value.isMockData = response.isMockData;
+
+    if (response.isMockData) {
+      message.info('当前显示的是演示引用文本', { duration: 2000 });
+    }
+  } catch (error) {
+    message.error('获取引用文本失败');
+    showCitationModal.value = false;
+  } finally {
+    citationLoading.value = false;
+  }
+};
+
+// 复制引用文本
+const handleCopyCitation = async () => {
+  if (!currentCitation.value.text) return;
+
+  try {
+    await navigator.clipboard.writeText(currentCitation.value.text);
+    message.success('引用文本已复制到剪贴板');
+  } catch (error) {
+    message.error('复制失败，请手动复制');
+  }
 };
 
 // 成果类型统计图表
